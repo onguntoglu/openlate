@@ -8,6 +8,35 @@ use std::io::BufReader;
 use std::path::Path;
 
 #[derive(Hash, Eq, PartialEq, Debug, Deserialize)]
+struct EnumName(String);
+
+#[derive(Debug, Deserialize)]
+struct EnumValues {
+  values: Vec<EnumFields>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct EnumDescription {
+  description: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct EnumFields {
+  #[serde(default)]
+  documentation: EnumDescription,
+  name: String,
+  value: i32,
+}
+
+fn default_resource() -> String {
+  "".to_string()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct EnumMetadata(HashMap<EnumName, EnumValues>);
+
+#[derive(Hash, Eq, PartialEq, Debug, Deserialize)]
 struct Integer(String);
 
 impl From<Integer> for i32 {
@@ -52,7 +81,7 @@ struct Fields {
 }
 
 #[cfg(test)]
-fn serde_nidaqmx() -> Result<Attributes> {
+fn serde_attr() -> Result<Attributes> {
   let file = File::open("metadata/nidaqmx/attributes.json").unwrap();
   let reader = BufReader::new(file);
 
@@ -63,9 +92,24 @@ fn serde_nidaqmx() -> Result<Attributes> {
   Ok(u)
 }
 
+#[cfg(test)]
+fn serde_enum() -> Result<EnumMetadata> {
+  let file = File::open("metadata/nidaqmx/enums.json").unwrap();
+  let reader = BufReader::new(file);
+  let u = serde_json::from_reader(reader).unwrap();
+
+  Ok(u)
+}
+
 #[test]
-fn test_json_to_nidaqmx() {
-  let u = serde_nidaqmx().unwrap();
+fn test_attr() {
+  let u = serde_attr().unwrap();
+  // println!("{:#?}", u);
+  println!("{:#?}", u);
+}
+#[test]
+fn test_enum() {
+  let u = serde_enum().unwrap();
   // println!("{:#?}", u);
   println!("{:#?}", u);
 }
