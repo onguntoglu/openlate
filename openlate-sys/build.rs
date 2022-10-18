@@ -12,7 +12,7 @@ fn main() {
   println!("cargo:rustc-link-lib=nidaqmx");
 
   // Tell cargo to invalidate the built crate whenever the wrapper changes
-  println!("cargo:rerun-if-changed=../includes/wrapper.h");
+  println!("cargo:rerun-if-changed=./includes/wrapper.h");
 
   let mut args = Vec::new();
   args.push("-fparse-all-comments");
@@ -24,7 +24,7 @@ fn main() {
   let bindings = bindgen::Builder::default()
     // The input header we would like to generate
     // bindings for.
-    .header("../includes/wrapper.h")
+    .header("./includes/wrapper.h")
     .rustfmt_bindings(true)
     .clang_args(args.into_iter())
     // .generate_block(true)
