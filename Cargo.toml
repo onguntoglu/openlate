@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+    "openlate-sys",
+    "openlate-codegen",
+    "openlate-lib"
+]

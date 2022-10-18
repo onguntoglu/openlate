@@ -1,0 +1,3 @@
+[submodule "third-party/grpc-device"]
+	path = third-party/grpc-device
+	url = git@github.com:ni/grpc-device.git
