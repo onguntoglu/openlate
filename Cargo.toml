@@ -3,5 +3,6 @@
 members = [
     "openlate-sys",
     "openlate-codegen",
-    "openlate-lib"
+    "openlate-lib",
+    "openlate-test"
 ]
