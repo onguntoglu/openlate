@@ -1,0 +1,23 @@
+{
+  "BurstPatternSynchronized": {
+    "parameters": {
+      "sessions": [
+        "INPUT_ARRAY_SHOULD_NOT_HAVE_PASSED_IN_SIZE"
+      ]
+    }
+  },
+  "EnableMatchFailCombination": {
+    "parameters": {
+      "sessions": [
+        "INPUT_ARRAY_SHOULD_NOT_HAVE_PASSED_IN_SIZE"
+      ]
+    }
+  },
+  "WriteSequencerFlagSynchronized": {
+    "parameters": {
+      "sessions": [
+        "INPUT_ARRAY_SHOULD_NOT_HAVE_PASSED_IN_SIZE"
+      ]
+    }
+  }
+}

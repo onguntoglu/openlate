@@ -1,0 +1,102 @@
+{
+  "WriteCtrFreq": {
+    "parameters": {
+      "frequency": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ],
+      "dutyCycle": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteCtrTicks": {
+    "parameters": {
+      "highTicks": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ],
+      "lowTicks": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteCtrTime": {
+    "parameters": {
+      "highTime": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ],
+      "lowTime": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteAnalogF64": {
+    "parameters": {
+      "writeArray": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteBinaryI16": {
+    "parameters": {
+      "writeArray": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteBinaryI32": {
+    "parameters": {
+      "writeArray": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteBinaryU16": {
+    "parameters": {
+      "writeArray": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteBinaryU32": {
+    "parameters": {
+      "writeArray": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteDigitalLines": {
+    "parameters": {
+      "writeArray": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteDigitalU16": {
+    "parameters": {
+      "writeArray": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteDigitalU32": {
+    "parameters": {
+      "writeArray": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteDigitalU8": {
+    "parameters": {
+      "writeArray": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "WriteRaw": {
+    "parameters": {
+      "writeArray": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  }
+}

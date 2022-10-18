@@ -1,0 +1,23 @@
+{
+  "Recv": {
+    "parameters": {
+      "mem": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "RecvFrom": {
+    "parameters": {
+      "mem": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  },
+  "GetSockOpt": {
+    "parameters": {
+      "optval": [
+        "ARRAY_PARAMETER_NEEDS_SIZE"
+      ]
+    }
+  }
+}

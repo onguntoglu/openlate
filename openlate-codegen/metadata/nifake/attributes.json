@@ -1,0 +1,81 @@
+{
+  "1000000": {
+    "codegen_method": "public",
+    "grpc_type": "bool",
+    "name": "READ_WRITE_BOOL",
+    "resettable": false,
+    "type": "ViBoolean"
+  },
+  "1000001": {
+    "codegen_method": "public",
+    "grpc_type": "double",
+    "name": "READ_WRITE_DOUBLE",
+    "resettable": false,
+    "type": "ViReal64"
+  },
+  "1000002": {
+    "codegen_method": "public",
+    "grpc_type": "string",
+    "name": "READ_WRITE_STRING",
+    "resettable": false,
+    "type": "ViString"
+  },
+  "1000003": {
+    "codegen_method": "public",
+    "enum": "GrpcColorOverride",
+    "grpc_type": "sint32",
+    "name": "READ_WRITE_COLOR",
+    "resettable": false,
+    "type": "ViInt32"
+  },
+  "1000004": {
+    "codegen_method": "public",
+    "grpc_type": "sint32",
+    "name": "READ_WRITE_INTEGER",
+    "resettable": true,
+    "type": "ViInt32"
+  },
+  "1000005": {
+    "codegen_method": "public",
+    "enum": "FloatEnum",
+    "grpc_type": "double",
+    "name": "FLOAT_ENUM_NAME_OVERRIDE",
+    "resettable": false,
+    "type": "ViReal64"
+  },
+  "1000006": {
+    "codegen_method": "public",
+    "grpc_type": "int64",
+    "name": "READ_WRITE_INT64",
+    "resettable": false,
+    "type": "ViInt64"
+  },
+  "1000007": {
+    "codegen_method": "public",
+    "grpc_type": "double",
+    "name": "READ_WRITE_DOUBLE_WITH_CONVERTER",
+    "resettable": false,
+    "type": "ViReal64"
+  },
+  "1000008": {
+    "codegen_method": "public",
+    "grpc_type": "sint32",
+    "name": "READ_WRITE_INTEGER_WITH_CONVERTER",
+    "resettable": false,
+    "type": "ViInt32"
+  },
+  "1000009": {
+    "codegen_method": "public",
+    "grpc_type": "double",
+    "name": "READ_WRITE_DOUBLE_WITH_REPEATED_CAPABILITY",
+    "resettable": false,
+    "type": "ViReal64"
+  },
+  "1000010": {
+    "codegen_method": "public",
+    "grpc_type": "string",
+    "name": "READ_WRITE_STRING_REPEATED_CAPABILITY",
+    "resettable": false,
+    "type": "ViString"
+  }
+}
