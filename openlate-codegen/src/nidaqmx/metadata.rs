@@ -1,43 +1,71 @@
-use openlate_sys;
 use serde::{self, Deserialize, Serialize};
-use serde_json::{Number, Result, Value};
-use std::collections::HashMap;
-use std::error::Error;
-use std::fs::File;
-use std::io::BufReader;
-use std::path::Path;
+use serde_json::{self, Result};
+use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf};
 
-#[derive(Hash, Eq, PartialEq, Debug, Deserialize)]
-struct EnumName(String);
-
-#[derive(Debug, Deserialize)]
-struct EnumValues {
-  values: Vec<EnumFields>,
+#[derive(Serialize, Debug)]
+pub struct NidaqmxMetadata {
+  pub enums: EnumMetadata,
+  pub func: FuncMetadata,
+  pub attr: AttrMetadata,
 }
 
-#[derive(Debug, Default, Deserialize)]
-struct EnumDescription {
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct FuncMetadata(HashMap<FuncName, FuncFields>);
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FuncFields {
+  parameters: Vec<FuncParameter>,
+  returns: FuncReturn,
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq, Hash, Deserialize)]
+pub struct FuncName(String);
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FuncReturn(String);
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FuncParameter {
+  direction: String,
+  name: String,
+  r#type: Option<String>,
+  size: Option<ParameterSize>,
+  r#enum: Option<EnumName>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ParameterSize {
+  mechanism: String,
+  value: String,
+}
+
+#[derive(Hash, Default, Eq, PartialEq, Debug, Serialize, Deserialize)]
+pub struct EnumName(String);
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EnumValues {
+  values: Vec<EnumVariant>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EnumDescription {
   description: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct EnumFields {
-  #[serde(default)]
-  documentation: EnumDescription,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EnumVariant {
+  documentation: Option<EnumDescription>,
   name: String,
   value: i32,
 }
 
-fn default_resource() -> String {
-  "".to_string()
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct EnumMetadata(HashMap<EnumName, EnumValues>);
+pub struct EnumMetadata(HashMap<EnumName, EnumValues>);
 
-#[derive(Hash, Eq, PartialEq, Debug, Deserialize)]
-struct Integer(String);
+#[derive(Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Integer(String);
 
 impl From<Integer> for i32 {
   fn from(attr_val: Integer) -> Self {
@@ -47,69 +75,89 @@ impl From<Integer> for i32 {
   }
 }
 
-type Attr = HashMap<Integer, Fields>;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AttrContent(HashMap<Integer, AttrProperty>);
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct Attributes {
-  buffer: Attr,
-  calibration_info: Attr,
-  channel: Attr,
-  device: Attr,
-  export_signal: Attr,
-  persisted_channel: Attr,
-  persisted_scale: Attr,
-  persisted_task: Attr,
-  physical_channel: Attr,
-  read: Attr,
-  real_time: Attr,
-  scale: Attr,
-  system: Attr,
-  task: Attr,
-  trigger: Attr,
-  watchdog: Attr,
-  write: Attr,
-}
+pub struct AttrMetadata(HashMap<String, AttrContent>);
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Fields {
+pub struct AttrProperty {
   access: String,
   name: String,
   resettable: bool,
   r#type: String,
 }
 
-#[cfg(test)]
-fn serde_attr() -> Result<Attributes> {
-  let file = File::open("metadata/nidaqmx/attributes.json").unwrap();
-  let reader = BufReader::new(file);
+impl Default for NidaqmxMetadata {
+  fn default() -> NidaqmxMetadata {
+    let metadata_dir = PathBuf::from("metadata/nidaqmx");
+    let metadata = ["functions.json", "attributes.json", "enums.json"];
+    let mut map: HashMap<String, BufReader<File>> = HashMap::new();
+    for meta in metadata {
+      let m =
+        metadata_dir.join(PathBuf::from(meta).as_os_str().to_str().unwrap());
+      println!("{:#?}", m);
+      let file = File::open(m).unwrap();
+      map.insert(meta.replace(".json", "").to_string(), BufReader::new(file));
+    }
 
-  // Read the JSON contents of the file as an instance of `User`.
-  let u = serde_json::from_reader(reader).unwrap();
+    let enums: EnumMetadata =
+      serde_json::from_reader(map.get_mut("enums").unwrap()).unwrap();
+    let func: FuncMetadata =
+      serde_json::from_reader(map.get_mut("functions").unwrap()).unwrap();
+    let attr: AttrMetadata =
+      serde_json::from_reader(map.get_mut("attributes").unwrap()).unwrap();
 
-  // Return the `User`.
-  Ok(u)
+    NidaqmxMetadata { enums, func, attr }
+  }
 }
 
 #[cfg(test)]
-fn serde_enum() -> Result<EnumMetadata> {
-  let file = File::open("metadata/nidaqmx/enums.json").unwrap();
-  let reader = BufReader::new(file);
-  let u = serde_json::from_reader(reader).unwrap();
+mod tests {
+  use super::*;
+  use serde_json::{self, Result};
+  use std::{fs::File, io::BufReader};
+  fn serde_func() -> Result<FuncMetadata> {
+    let file = File::open("metadata/nidaqmx/functions.json").unwrap();
+    let reader = BufReader::new(file);
+    let u = serde_json::from_reader(reader).unwrap();
+    Ok(u)
+  }
 
-  Ok(u)
-}
+  #[cfg(test)]
+  fn serde_attr() -> Result<AttrMetadata> {
+    let file = File::open("metadata/nidaqmx/attributes.json").unwrap();
+    let reader = BufReader::new(file);
+    let u = serde_json::from_reader(reader).unwrap();
+    Ok(u)
+  }
 
-#[test]
-fn test_attr() {
-  let u = serde_attr().unwrap();
-  // println!("{:#?}", u);
-  println!("{:#?}", u);
-}
-#[test]
-fn test_enum() {
-  let u = serde_enum().unwrap();
-  // println!("{:#?}", u);
-  println!("{:#?}", u);
+  #[cfg(test)]
+  fn serde_enum() -> Result<EnumMetadata> {
+    let file = File::open("metadata/nidaqmx/enums.json").unwrap();
+    let reader = BufReader::new(file);
+    let u = serde_json::from_reader(reader).unwrap();
+    Ok(u)
+  }
+
+  #[test]
+  fn test_attr() {
+    let u = serde_attr().unwrap();
+    println!("{:#?}", u);
+  }
+
+  #[test]
+  fn test_enum() {
+    let u = serde_enum().unwrap();
+    println!("{:#?}", u);
+  }
+
+  #[test]
+  fn test_func() {
+    let u = serde_func().unwrap();
+    println!("{:#?}", u);
+  }
 }

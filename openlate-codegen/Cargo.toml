@@ -2,8 +2,13 @@
 name = "openlate-codegen"
 version = "0.1.0"
 edition = "2021"
+exclude = ["metadata/*.md", "*.py", "**/__pycache__", "**.mako", "**.pyc", "**.proto"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[build-dependencies]
-openlate-template = {path = "openlate-template"}
+[dependencies]
+tera = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1"
+lazy_static = "1.4.0"
+tinytemplate = "1.2.1"
+include_dir = "0.7.3"

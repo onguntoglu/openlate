@@ -1,0 +1,10 @@
+pub mod DaqmxValues {
+    {% for namespace, enums in nidaqmx.enums %}
+    #[derive(Debug)]
+    pub enum {{namespace}} {
+        {% for variant in enums.values %}{{variant.documentation}}
+        {{variant.name}},
+        {% endfor %}
+    }
+    {% endfor %}
+}
