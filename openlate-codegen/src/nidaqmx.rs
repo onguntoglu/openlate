@@ -1,11 +1,47 @@
+use codegen::{Scope, Variant};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{self, Deserialize, Serialize};
 use serde_json::{self, Result};
-use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf};
+use std::borrow::Cow;
+use std::{
+  collections::HashMap, fs::File, io::BufReader, ops::Deref, path::PathBuf,
+};
 
 lazy_static! {
   static ref NUMBER_AT_START: Regex = Regex::new(r"^(\d+)").unwrap();
+}
+
+pub struct NidaqmxGen {
+  scope: Scope,
+  nidaqmx: NidaqmxMetadata,
+}
+
+impl NidaqmxGen {
+  fn new() -> Self {
+    NidaqmxGen {
+      scope: Scope::new(),
+      nidaqmx: NidaqmxMetadata::default(),
+    }
+  }
+  fn generate_enums(mut self) -> Self {
+    for enm in self.nidaqmx.enums.iter() {
+      let curr_enm = self.scope.new_enum(enm.0.to_string());
+      let enm_values = enm.1;
+      for variant in enm_values.iter() {
+        let var = variant.clone().swap_number();
+        let new_var = curr_enm.new_variant(var.name);
+        match var.documentation {
+          Some(doc) => new_var.annotation(doc.add_quotes().description),
+          None => new_var,
+        };
+      }
+    }
+    self
+  }
+  pub fn generate(&self) -> String {
+    self.scope.to_string()
+  }
 }
 
 #[derive(Serialize, Debug)]
@@ -46,20 +82,58 @@ pub struct ParameterSize {
   value: String,
 }
 
-#[derive(Hash, Default, Eq, PartialOrd, Debug, Serialize, Deserialize)]
+#[derive(Hash, Default, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct EnumName(String);
+
+impl Deref for EnumMetadata {
+  type Target = HashMap<EnumName, EnumValues>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0 //pointer to Inner value
+  }
+}
+
+impl Deref for EnumName {
+  type Target = String;
+  fn deref(&self) -> &Self::Target {
+    &self.0 //pointer to Inner value
+  }
+}
+
+impl Deref for EnumValues {
+  type Target = Vec<EnumVariant>;
+  fn deref(&self) -> &Self::Target {
+    &self.values //pointer to Inner value
+  }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EnumValues {
   values: Vec<EnumVariant>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EnumDescription {
   description: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl EnumDescription {
+  fn add_quotes(mut self) -> Self {
+    let front = &"\"".to_owned();
+    self.description = front.to_owned() + &self.description + &"\"".to_owned();
+    self
+  }
+}
+
+impl Deref for EnumDescription {
+  type Target = String;
+
+  fn deref(&self) -> &Self::Target {
+    &self.description //pointer to Inner value
+  }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EnumVariant {
   documentation: Option<EnumDescription>,
   name: String,
@@ -121,8 +195,8 @@ impl Default for NidaqmxMetadata {
   }
 }
 
-impl SwapNumberToBack for EnumVariant {
-  fn swap_number(mut self) -> EnumVariant {
+impl EnumProcessor for EnumVariant {
+  fn swap_number(mut self) -> Self {
     let foo = match self.name.split("_").next() {
       None => self.name,
       Some(num) => match num.as_bytes()[0].is_ascii_digit() {
@@ -145,7 +219,7 @@ impl SwapNumberToBack for EnumVariant {
   }
 }
 
-pub trait SwapNumberToBack {
+pub trait EnumProcessor {
   fn swap_number(self) -> Self;
 }
 
@@ -200,5 +274,11 @@ mod tests {
       value: 4,
     };
     println!("{:#?}", variant.swap_number());
+  }
+  #[test]
+  fn test_gen_enums() {
+    let gen = NidaqmxGen::new();
+    let rendered = gen.generate_enums().generate();
+    println!("{:#?}", rendered);
   }
 }
