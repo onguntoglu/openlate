@@ -1,6 +1,12 @@
+use lazy_static::lazy_static;
+use regex::Regex;
 use serde::{self, Deserialize, Serialize};
 use serde_json::{self, Result};
 use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf};
+
+lazy_static! {
+  static ref NUMBER_AT_START: Regex = Regex::new(r"^(\d+)").unwrap();
+}
 
 #[derive(Serialize, Debug)]
 pub struct NidaqmxMetadata {
@@ -40,7 +46,7 @@ pub struct ParameterSize {
   value: String,
 }
 
-#[derive(Hash, Default, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Hash, Default, Eq, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct EnumName(String);
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -93,7 +99,7 @@ pub struct AttrProperty {
 
 impl Default for NidaqmxMetadata {
   fn default() -> NidaqmxMetadata {
-    let metadata_dir = PathBuf::from("metadata/nidaqmx");
+    let metadata_dir = PathBuf::from("metadata/nidaqmx/");
     let metadata = ["functions.json", "attributes.json", "enums.json"];
     let mut map: HashMap<String, BufReader<File>> = HashMap::new();
     for meta in metadata {
@@ -115,11 +121,40 @@ impl Default for NidaqmxMetadata {
   }
 }
 
+impl SwapNumberToBack for EnumVariant {
+  fn swap_number(mut self) -> EnumVariant {
+    let foo = match self.name.split("_").next() {
+      None => self.name,
+      Some(num) => match num.as_bytes()[0].is_ascii_digit() {
+        true => {
+          self
+            .name
+            .strip_prefix(num)
+            .expect("Could not strip prefix")
+            .strip_prefix("_")
+            .unwrap_or_default()
+            .to_owned()
+            + "_"
+            + num
+        }
+        false => self.name,
+      },
+    };
+    self.name = foo;
+    self
+  }
+}
+
+pub trait SwapNumberToBack {
+  fn swap_number(self) -> Self;
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
   use serde_json::{self, Result};
   use std::{fs::File, io::BufReader};
+
   fn serde_func() -> Result<FuncMetadata> {
     let file = File::open("metadata/nidaqmx/functions.json").unwrap();
     let reader = BufReader::new(file);
@@ -156,8 +191,14 @@ mod tests {
   }
 
   #[test]
-  fn test_func() {
-    let u = serde_func().unwrap();
-    println!("{:#?}", u);
+  fn test_swap_strnum_toback() {
+    let variant = EnumVariant {
+      documentation: Some(EnumDescription {
+        description: String::from("4-wire"),
+      }),
+      name: String::from("4_WIRE"),
+      value: 4,
+    };
+    println!("{:#?}", variant.swap_number());
   }
 }
