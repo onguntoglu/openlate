@@ -3,7 +3,6 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{self, Deserialize, Serialize};
 use serde_json::{self, Result};
-use std::borrow::Cow;
 use std::{
   collections::HashMap, fs::File, io::BufReader, ops::Deref, path::PathBuf,
 };
@@ -18,18 +17,19 @@ pub struct NidaqmxGen {
 }
 
 impl NidaqmxGen {
-  fn new() -> Self {
+  pub fn new() -> Self {
     NidaqmxGen {
       scope: Scope::new(),
       nidaqmx: NidaqmxMetadata::default(),
     }
+    .generate_enums()
   }
   fn generate_enums(mut self) -> Self {
     for enm in self.nidaqmx.enums.iter() {
       let curr_enm = self.scope.new_enum(enm.0.to_string());
       let enm_values = enm.1;
       for variant in enm_values.iter() {
-        let var = variant.clone().swap_number();
+        let var = variant.clone().prefix_letter();
         let new_var = curr_enm.new_variant(var.name);
         match var.documentation {
           Some(doc) => new_var.annotation(doc.add_quotes().description),
@@ -119,8 +119,9 @@ pub struct EnumDescription {
 
 impl EnumDescription {
   fn add_quotes(mut self) -> Self {
-    let front = &"\"".to_owned();
-    self.description = front.to_owned() + &self.description + &"\"".to_owned();
+    let front = &"#[doc = \" ".to_owned();
+    self.description =
+      front.to_owned() + &self.description + &"\" ]".to_owned();
     self
   }
 }
@@ -196,6 +197,14 @@ impl Default for NidaqmxMetadata {
 }
 
 impl EnumProcessor for EnumVariant {
+  fn prefix_letter(mut self) -> Self {
+    let foo = match self.name.as_bytes()[0].is_ascii_digit() {
+      true => "d".to_owned() + &self.name,
+      false => self.name,
+    };
+    self.name = foo;
+    self
+  }
   fn swap_number(mut self) -> Self {
     let foo = match self.name.split("_").next() {
       None => self.name,
@@ -221,6 +230,7 @@ impl EnumProcessor for EnumVariant {
 
 pub trait EnumProcessor {
   fn swap_number(self) -> Self;
+  fn prefix_letter(self) -> Self;
 }
 
 #[cfg(test)]
