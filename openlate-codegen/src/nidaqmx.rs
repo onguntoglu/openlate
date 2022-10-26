@@ -1,8 +1,8 @@
-use codegen::{Scope, Variant};
+use codegen;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{self, Deserialize, Serialize};
-use serde_json::{self, Result};
+use serde_json::{self};
 use std::{
   collections::HashMap, fs::File, io::BufReader, ops::Deref, path::PathBuf,
 };
@@ -12,33 +12,71 @@ lazy_static! {
 }
 
 pub struct NidaqmxGen {
-  scope: Scope,
+  scope: codegen::Scope,
   nidaqmx: NidaqmxMetadata,
 }
 
 impl NidaqmxGen {
-  pub fn new() -> Self {
+  pub fn new() -> NidaqmxGen {
     NidaqmxGen {
-      scope: Scope::new(),
+      scope: codegen::Scope::new(),
       nidaqmx: NidaqmxMetadata::default(),
     }
     .generate_enums()
   }
-  fn generate_enums(mut self) -> Self {
+  fn generate_impl_from(
+    &self,
+    generic: &str,
+    target: &str,
+    block: codegen::Block,
+  ) -> codegen::Impl {
+    let mut impl_from = codegen::Impl::new(codegen::Type::new(format!(
+      "From<{}> for {}",
+      generic, target
+    )));
+    let fn_from = codegen::Function::new("from")
+      .arg("val", codegen::Type::new(generic))
+      .ret(codegen::Type::new(target))
+      .push_block(block)
+      .to_owned();
+    return impl_from.push_fn(fn_from).to_owned();
+  }
+
+  fn generate_enums(mut self) -> NidaqmxGen {
     for enm in self.nidaqmx.enums.iter() {
-      let curr_enm = self.scope.new_enum(enm.0.to_string());
-      let enm_values = enm.1;
+      let (enum_name, enm_values) = (enm.0.to_string(), enm.1);
+      let mut curr_enm = codegen::Enum::new(enum_name.to_owned());
+      let mut block_raw = codegen::Block::new("match val");
+      let mut block_enum = codegen::Block::new("match val");
+
       for variant in enm_values.iter() {
-        let var = variant.clone().prefix_letter();
-        let new_var = curr_enm.new_variant(var.name);
-        match var.documentation {
-          Some(doc) => new_var.annotation(doc.add_quotes().description),
-          None => new_var,
+        let fixed_var = variant.clone().prefix_letter();
+        let mut var = codegen::Variant::new(fixed_var.to_owned().name);
+        match fixed_var.documentation {
+          Some(doc) => var.annotation(doc.add_quotes().description),
+          None => &mut var,
         };
+        curr_enm.push_variant(var);
+        block_raw.line(format!(
+          "{}_i32 => {}::{},",
+          fixed_var.value, enum_name, fixed_var.name
+        ));
+        block_enum.line(format!(
+          "{}::{} => {}_i32,",
+          enum_name, fixed_var.name, fixed_var.value
+        ));
       }
+      let fr_raw = self.generate_impl_from("i32", &enum_name, block_raw);
+      let fr_enum = self.generate_impl_from(&enum_name, "i32", block_enum);
+      self
+        .scope
+        .push_enum(curr_enm.vis("pub").to_owned())
+        .push_impl(fr_raw.to_owned())
+        .push_impl(fr_enum.to_owned());
     }
     self
   }
+
   pub fn generate(&self) -> String {
     self.scope.to_string()
   }
@@ -119,9 +157,8 @@ pub struct EnumDescription {
 
 impl EnumDescription {
   fn add_quotes(mut self) -> Self {
-    let front = &"#[doc = \" ".to_owned();
-    self.description =
-      front.to_owned() + &self.description + &"\" ]".to_owned();
+    let front = &"#[doc=\"".to_owned();
+    self.description = front.to_owned() + &self.description + &"\"]".to_owned();
     self
   }
 }
