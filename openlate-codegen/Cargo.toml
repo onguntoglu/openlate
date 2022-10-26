@@ -4,7 +4,18 @@ version = "0.1.0"
 edition = "2021"
 exclude = ["metadata/*.md", "*.py", "**/__pycache__", "**.mako", "**.pyc", "**.proto"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "openlate_codegen"
+
+[build-dependencies]
+openlate-sys = {path = "../openlate-sys"}
+serde = { version = "1.0", features = ["derive"] }
+Inflector = "0.11.4"
+serde_json = "1"
+codegen = "0.2.0"
+lazy_static = "1.4.0"
+regex = "1"
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 Inflector = "0.11.4"

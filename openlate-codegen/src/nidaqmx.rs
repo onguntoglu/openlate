@@ -25,6 +25,8 @@ fn gen_attr_with_payload(
   let fn_from = cgen::Function::new("value")
     .vis("const")
     .arg_self()
+    .generic("T")
+    .generic("N")
     .ret(typedef(target))
     .push_block(block)
     .to_owned();
@@ -64,14 +66,20 @@ impl NidaqmxGen {
   fn generate_attrs(mut self) -> NidaqmxGen {
     let attr_it = self.nidaqmx.attr.0.drain();
     for attr in attr_it {
-      let (attr_name, attr_values) =
-        (attr.0.clone().to_string().to_pascal_case(), attr.1.clone());
+      let (attr_name, attr_values) = (
+        attr.0.clone().to_string().to_pascal_case().to_owned(),
+        attr.1.clone(),
+      );
       let mut curr_enm = cgen::Enum::new(attr_name.to_owned());
       let mut inner_block = cgen::Block::new("match self");
 
       for content in attr_values.0.iter() {
         let (_, attr_property) = content;
-        let attr_variant = attr_property.name.to_pascal_case().to_owned();
+        let attr_variant = attr_property
+          .to_owned()
+          .prefix_letter("d")
+          .name
+          .to_pascal_case();
         let var = cgen::Variant::new(attr_variant.to_owned());
         let tn = <(&str, &str)>::from(attr_property.r#type.to_owned());
         curr_enm.push_variant(var);
@@ -419,7 +427,7 @@ impl Default for NidaqmxMetadata {
   }
 }
 
-impl EnumProcessor for EnumVariant {
+impl ItemProcessor for AttrProperty {
   fn prefix_letter(mut self, letter: &str) -> Self {
     let foo = match self.name.as_bytes()[0].is_ascii_digit() {
       true => letter.to_owned() + &self.name,
@@ -428,31 +436,20 @@ impl EnumProcessor for EnumVariant {
     self.name = foo;
     self
   }
-  fn swap_number(mut self) -> Self {
-    let foo = match self.name.split("_").next() {
-      None => self.name,
-      Some(num) => match num.as_bytes()[0].is_ascii_digit() {
-        true => {
-          self
-            .name
-            .strip_prefix(num)
-            .expect("Could not strip prefix")
-            .strip_prefix("_")
-            .unwrap_or_default()
-            .to_owned()
-            + "_"
-            + num
-        }
-        false => self.name,
-      },
+}
+
+impl ItemProcessor for EnumVariant {
+  fn prefix_letter(mut self, letter: &str) -> Self {
+    let foo = match self.name.as_bytes()[0].is_ascii_digit() {
+      true => letter.to_owned() + &self.name,
+      false => self.name,
     };
     self.name = foo;
     self
   }
 }
 
-pub trait EnumProcessor {
-  fn swap_number(self) -> Self;
+pub trait ItemProcessor {
   fn prefix_letter(self, letter: &str) -> Self;
 }
 
@@ -506,7 +503,7 @@ mod tests {
       name: String::from("4_WIRE"),
       value: 4,
     };
-    println!("{:#?}", variant.swap_number());
+    println!("{:#?}", variant.prefix_letter("d"));
   }
   #[test]
   fn test_gen_enums() {
