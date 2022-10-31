@@ -5,7 +5,11 @@ use regex::Regex;
 use serde::{self, Deserialize, Serialize};
 use serde_json;
 use std::{
-  collections::HashMap, fs::File, io::BufReader, ops::Deref, path::PathBuf,
+  collections::HashMap,
+  fs::File,
+  io::BufReader,
+  ops::{Deref, DerefMut},
+  path::PathBuf,
 };
 
 lazy_static! {
@@ -59,9 +63,25 @@ impl NidaqmxGen {
       scope: cgen::Scope::new(),
       nidaqmx: NidaqmxMetadata::default(),
     }
-    .generate
+    // .generate_funcs()
+    .generate_accrs()
     .generate_enums()
     .generate_attrs()
+  }
+
+  fn generate_accrs(mut self) -> NidaqmxGen {
+    let accr_ns = self.nidaqmx.accr.0.drain();
+    for mut acc in accr_ns {
+      let (_accr_nspace, accr_mem) =
+        (acc.0.to_owned().to_pascal_case(), acc.1.drain());
+      for accr in accr_mem {
+        for subm in accr.1 .0 {
+          let curr_accr = cgen::Function::new(String::from("DAQmx") + &subm.0);
+          self.scope.push_fn(curr_accr);
+        }
+      }
+    }
+    self
   }
 
   fn generate_attrs(mut self) -> NidaqmxGen {
@@ -182,13 +202,19 @@ pub struct AccrMetadata(HashMap<AccrNamespace, AccrMembers>);
 pub struct AccrNamespace(String);
 
 #[derive(Debug, Serialize, Eq, PartialEq, Deserialize)]
-pub struct AccrMembers(HashMap<AccrName, AccrFields>);
+pub struct AccrMembers(HashMap<AccrGroup, AccrSubmember>);
+
+#[derive(Debug, Serialize, Eq, PartialEq, Hash, Deserialize)]
+pub struct AccrGroup(String);
+
+#[derive(Debug, Serialize, Eq, PartialEq, Deserialize)]
+pub struct AccrSubmember(HashMap<String, AccrFields>);
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct AccrFields {
-  accessor: Option<String>,
-  parameter: Option<Vec<AccrParameter>>,
-  returns: Option<String>,
+  accessor: String,
+  parameter: Vec<AccrParameter>,
+  returns: String,
 }
 
 #[derive(Debug, Serialize, Eq, PartialEq, Hash, Deserialize)]
@@ -255,6 +281,30 @@ impl Deref for AttrMetadata {
 }
 
 impl Deref for EnumName {
+  type Target = String;
+  fn deref(&self) -> &Self::Target {
+    &self.0 //pointer to Inner value
+  }
+}
+impl Deref for AccrNamespace {
+  type Target = String;
+  fn deref(&self) -> &Self::Target {
+    &self.0 //pointer to Inner value
+  }
+}
+impl Deref for AccrMembers {
+  type Target = HashMap<AccrGroup, AccrSubmember>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0 //pointer to Inner value
+  }
+}
+impl DerefMut for AccrMembers {
+  fn deref_mut(&mut self) -> &mut HashMap<AccrGroup, AccrSubmember> {
+    &mut self.0 //pointer to Inner value
+  }
+}
+impl Deref for AccrName {
   type Target = String;
   fn deref(&self) -> &Self::Target {
     &self.0 //pointer to Inner value
@@ -509,6 +559,13 @@ mod tests {
     Ok(u)
   }
 
+  fn serde_accr() -> Result<AccrMetadata> {
+    let file = File::open("metadata/nidaqmx/accessors.json").unwrap();
+    let reader = BufReader::new(file);
+    let u = serde_json::from_reader(reader).unwrap();
+    Ok(u)
+  }
+
   #[cfg(test)]
   fn serde_attr() -> Result<AttrMetadata> {
     let file = File::open("metadata/nidaqmx/attributes.json").unwrap();
@@ -534,6 +591,12 @@ mod tests {
   #[test]
   fn test_enum() {
     let u = serde_enum().unwrap();
+    println!("{:#?}", u);
+  }
+
+  #[test]
+  fn test_accr() {
+    let u = serde_accr().unwrap();
     println!("{:#?}", u);
   }
 
