@@ -59,6 +59,7 @@ impl NidaqmxGen {
       scope: cgen::Scope::new(),
       nidaqmx: NidaqmxMetadata::default(),
     }
+    .generate
     .generate_enums()
     .generate_attrs()
   }
@@ -170,6 +171,36 @@ pub struct NidaqmxMetadata {
   pub enums: EnumMetadata,
   pub func: FuncMetadata,
   pub attr: AttrMetadata,
+  pub accr: AccrMetadata,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct AccrMetadata(HashMap<AccrNamespace, AccrMembers>);
+
+#[derive(Debug, Serialize, Eq, PartialEq, Hash, Deserialize)]
+pub struct AccrNamespace(String);
+
+#[derive(Debug, Serialize, Eq, PartialEq, Deserialize)]
+pub struct AccrMembers(HashMap<AccrName, AccrFields>);
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct AccrFields {
+  accessor: Option<String>,
+  parameter: Option<Vec<AccrParameter>>,
+  returns: Option<String>,
+}
+
+#[derive(Debug, Serialize, Eq, PartialEq, Hash, Deserialize)]
+pub struct AccrName(String);
+
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize, Hash)]
+pub struct AccrParameter {
+  direction: String,
+  name: String,
+  r#type: Option<String>,
+  size: Option<ParameterSize>,
+  r#enum: Option<EnumName>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -197,7 +228,7 @@ pub struct FuncParameter {
   r#enum: Option<EnumName>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, PartialEq, Eq, Deserialize, Hash)]
 pub struct ParameterSize {
   mechanism: String,
   value: String,
@@ -406,7 +437,12 @@ impl Deref for AttrType {
 impl Default for NidaqmxMetadata {
   fn default() -> NidaqmxMetadata {
     let metadata_dir = PathBuf::from("metadata/nidaqmx/");
-    let metadata = ["functions.json", "attributes.json", "enums.json"];
+    let metadata = [
+      "functions.json",
+      "attributes.json",
+      "enums.json",
+      "accessors.json",
+    ];
     let mut map: HashMap<String, BufReader<File>> = HashMap::new();
     for meta in metadata {
       let m =
@@ -422,8 +458,15 @@ impl Default for NidaqmxMetadata {
       serde_json::from_reader(map.get_mut("functions").unwrap()).unwrap();
     let attr: AttrMetadata =
       serde_json::from_reader(map.get_mut("attributes").unwrap()).unwrap();
+    let accr: AccrMetadata =
+      serde_json::from_reader(map.get_mut("accessors").unwrap()).unwrap();
 
-    NidaqmxMetadata { enums, func, attr }
+    NidaqmxMetadata {
+      enums,
+      func,
+      attr,
+      accr,
+    }
   }
 }
 
