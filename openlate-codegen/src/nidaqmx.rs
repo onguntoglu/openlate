@@ -76,7 +76,72 @@ impl NidaqmxGen {
         (acc.0.to_owned().to_pascal_case(), acc.1.drain());
       for accr in accr_mem {
         for subm in accr.1 .0 {
-          let curr_accr = cgen::Function::new(String::from("DAQmx") + &subm.0);
+          let mut curr_accr =
+            cgen::Function::new(String::from("DAQmx") + &subm.0);
+          for par in subm.1.parameter {
+            match (par.direction.as_str(), par.r#enum, par.size) {
+              ("in", Some(enm), None) => {
+                curr_accr.arg(&par.name, enm.0);
+              }
+              ("in", None, None) => match par.name.as_str() {
+                "bufferSize" | "arraySizeInElements" => (),
+                &_ => {
+                  curr_accr.arg(&par.name, typedef(par.r#type));
+                }
+              },
+              ("out", Some(enm), None) => {
+                curr_accr.ret(typedef(enm.0));
+              }
+              ("out", None, None) => {
+                curr_accr.ret(typedef(par.r#type));
+              }
+              ("in", Some(enm), Some(sz)) => {
+                curr_accr.ret(typedef(format!("Vec<{}>", enm.0)))
+                  .line(
+                  format!("let {} = unsafe {{ openlate_sys::{}(std::ptr::null_mut(), 0_u32) }};"
+                  ,sz.value, subm.0))
+                .line(format!("let mut buf = vec![0_u8; {} as usize]", sz.value))
+                  .line(
+                  format!("let errcode = unsafe {{ openlate_sys::{}(buf.as_mut_ptr(), {}) }};"
+                  ,subm.0,sz.value))
+                ;
+              }
+              ("in", None, Some(sz)) => {
+                curr_accr.ret(typedef(format!("Vec<{}>", par.r#type)))
+                  .line(
+                  format!("let {} = unsafe {{ openlate_sys::{}(std::ptr::null_mut(), 0_u32) }};"
+                  ,sz.value, subm.0))
+                .line(format!("let mut buf = vec![0_u8; {} as usize]", sz.value))
+                  .line(
+                  format!("let errcode = unsafe {{ openlate_sys::{}(buf.as_mut_ptr() as *mut i8, {} as u32) }};"
+                  ,subm.0,sz.value))
+                ;
+              }
+              ("out", Some(enm), Some(sz)) => {
+                curr_accr.ret(typedef(format!("Vec<{}>", enm.0)))
+                  .line(
+                  format!("let {} = unsafe {{ openlate_sys::{}(std::ptr::null_mut(), 0_u32) }};"
+                  ,sz.value, subm.0))
+                .line(format!("let mut buf = vec![0_u8; {} as usize]", sz.value))
+                  .line(
+                  format!("let errcode = unsafe {{ openlate_sys::{}(buf.as_mut_ptr() as *mut i8, {} as u32) }};"
+                  ,subm.0,sz.value))
+                ;
+              }
+              ("out", None, Some(sz)) => {
+                curr_accr.ret(typedef(format!("Vec<{}>", par.r#type)))
+                  .line(
+                  format!("let {} = unsafe {{ openlate_sys::{}(std::ptr::null_mut(), 0_u32) }};"
+                  ,sz.value, subm.0))
+                .line(format!("let mut buf = vec![0_u8; {} as usize]", sz.value))
+                  .line(
+                  format!("let errcode = unsafe {{ openlate_sys::{}(buf.as_mut_ptr() as *mut i8, {} as u32) }};"
+                  ,subm.0,sz.value))
+                ;
+              }
+              (&_, _, _) => panic!("Panicked!"),
+            }
+          }
           self.scope.push_fn(curr_accr);
         }
       }
@@ -224,7 +289,7 @@ pub struct AccrName(String);
 pub struct AccrParameter {
   direction: String,
   name: String,
-  r#type: Option<String>,
+  r#type: String,
   size: Option<ParameterSize>,
   r#enum: Option<EnumName>,
 }
