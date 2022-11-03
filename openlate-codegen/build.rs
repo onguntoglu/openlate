@@ -6,19 +6,16 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-include!("src/lib.rs");
+include!("src/mod.rs");
 
 fn main() -> Result<(), Box<dyn Error>> {
-  let out_dir = PathBuf::new()
-    .join(std::env::var("OUT_DIR").unwrap())
-    .join("nidaqmx_gen.rs");
-  let dest_path = Path::new("nidaqmx_gen.rs");
-  let mut f = File::create(dest_path).unwrap();
-  let mut nidaqmx_out = File::create(out_dir).unwrap();
+  println!("cargo:rerun-if-changed=src/nidaqmx.rs");
+
+  let out_dir = PathBuf::new().join(std::env::var("OUT_DIR").unwrap());
+  let mut nidaqmx_out = File::create(out_dir.join("nidaqmx_gen.rs")).unwrap();
 
   let rendered = nidaqmx::NidaqmxGen::new();
 
-  f.write_all(rendered.generate().as_bytes()).unwrap();
   nidaqmx_out
     .write_all(rendered.generate().as_bytes())
     .unwrap();
