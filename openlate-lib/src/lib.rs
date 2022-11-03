@@ -1,3 +1,5 @@
+use openlate_codegen::nidaqmx_gen as nidaqmx;
+
 pub fn add(left: usize, right: usize) -> usize {
   left + right
 }
