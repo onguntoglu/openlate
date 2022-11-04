@@ -15,19 +15,35 @@ fn typedef(r#type: impl Into<String>) -> cgen::Type {
 }
 
 fn gen_attr_with_payload(
-  attr: &str,
-  target: &str,
-  block: cgen::Block,
-) -> cgen::Impl {
-  let mut impl_from = cgen::Impl::new(typedef(attr));
-  let fn_from = cgen::Function::new("value")
-    .vis("const")
-    .arg_self()
-    .ret(typedef(target))
-    .line(&format!("use {}::*;", &attr).to_owned())
-    .push_block(block)
+  attr: (AttrName, AttrContent),
+) -> (cgen::Struct, cgen::Impl) {
+  let (attr_name, attr_values) = (
+    attr.0.clone().to_string().to_pascal_case().to_owned(),
+    attr.1.clone(),
+  );
+  let mut curr_attr = cgen::Struct::new(&attr_name)
+    .attr("non_exhaustive")
     .to_owned();
-  return impl_from.push_fn(fn_from).to_owned();
+  let mut impl_attr = cgen::Impl::new(typedef(attr_name));
+  for content in attr_values.0.iter() {
+    let (attr_value, attr_property) = content;
+    let attr_variant = attr_property.to_owned().prefix_letter("X").name;
+    // .to_pascal_case();
+    impl_attr.associate_const(
+      attr_variant,
+      "DaqmxAttr",
+      format!(
+        "DaqmxAttr {{ value: {}, access: {}, resettable: {}}}",
+        attr_value.0,
+        String::from(AttrAccessEnum::from(attr_property.access.0.to_owned()))
+          .to_owned(),
+        attr_property.resettable.to_owned(),
+      )
+      .to_owned(),
+      "pub",
+    );
+  }
+  return (curr_attr, impl_attr);
 }
 
 fn generate_impl_from(
@@ -159,38 +175,8 @@ impl NidaqmxGen {
   fn generate_attrs(mut self) -> NidaqmxGen {
     let attr_it = self.nidaqmx.attr.0.drain();
     for attr in attr_it {
-      let (attr_name, attr_values) = (
-        attr.0.clone().to_string().to_pascal_case().to_owned(),
-        attr.1.clone(),
-      );
-      let mut curr_enm = cgen::Enum::new(attr_name.to_owned());
-      let mut inner_block = cgen::Block::new("match self").to_owned();
-
-      for content in attr_values.0.iter() {
-        let (attr_value, attr_property) = content;
-        let attr_variant = attr_property
-          .to_owned()
-          .prefix_letter("d")
-          .name
-          .to_pascal_case();
-        let var = cgen::Variant::new(attr_variant.to_owned());
-        let tn = <(&str, &str)>::from(attr_property.r#type.to_owned());
-        curr_enm.push_variant(var);
-        inner_block.line(format!(
-          "{} => DaqmxAttr {{ value: {}, access: {}, resettable: {}}},",
-          attr_variant,
-          attr_value.0,
-          String::from(AttrAccessEnum::from(attr_property.access.0.to_owned()))
-            .to_owned(),
-          attr_property.resettable.to_owned(),
-        ));
-      }
-      let impl_const_ifmatch =
-        gen_attr_with_payload(&attr_name, "DaqmxAttr", inner_block);
-      self
-        .scope
-        .push_enum(curr_enm.vis("pub").to_owned())
-        .push_impl(impl_const_ifmatch.to_owned());
+      let (attr_struct, attr_impl) = gen_attr_with_payload(attr);
+      self.scope.push_struct(attr_struct).push_impl(attr_impl);
     }
     let access_enum = cgen::Enum::new("AttrAccess")
       .push_variant(cgen::Variant::new("Read"))
