@@ -66,8 +66,6 @@ fn generate_impl_from(
   return impl_from.push_fn(fn_from).to_owned();
 }
 
-fn generate_fnbody(target: HashMap<FuncName, FuncFields>) {}
-
 pub struct NidaqmxGen {
   scope: cgen::Scope,
   nidaqmx: NidaqmxMetadata,
@@ -89,6 +87,14 @@ impl NidaqmxGen {
   fn generate_etc(mut self) -> NidaqmxGen {
     self.scope.import("std::any", "Any");
     self.scope.import("openlate_sys::nidaqmx", "*");
+    self
+  }
+
+  fn generate_funcs(mut self) -> NidaqmxGen {
+    let metadata = self.nidaqmx.func.0.drain();
+    for (name, fields) in metadata {
+      let mut f = cgen::Function::new(name.0);
+    }
     self
   }
 
@@ -286,6 +292,7 @@ pub struct FuncMetadata(HashMap<FuncName, FuncFields>);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FuncFields {
+  cname: Option<String>,
   parameters: Vec<FuncParameter>,
   returns: FuncReturn,
 }
