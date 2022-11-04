@@ -1,7 +1,5 @@
 use codegen as cgen;
 use inflector::Inflector;
-use lazy_static::lazy_static;
-use regex::Regex;
 use serde::{self, Deserialize, Serialize};
 use serde_json;
 use std::{
@@ -11,10 +9,6 @@ use std::{
   ops::{Deref, DerefMut},
   path::PathBuf,
 };
-
-lazy_static! {
-  static ref NUMBER_AT_START: Regex = Regex::new(r"^(\d+)").unwrap();
-}
 
 fn typedef(r#type: impl Into<String>) -> cgen::Type {
   cgen::Type::new(r#type)
@@ -29,9 +23,8 @@ fn gen_attr_with_payload(
   let fn_from = cgen::Function::new("value")
     .vis("const")
     .arg_self()
-    .generic("T")
-    .generic("N")
     .ret(typedef(target))
+    .line(&format!("use {}::*;", &attr).to_owned())
     .push_block(block)
     .to_owned();
   return impl_from.push_fn(fn_from).to_owned();
@@ -40,8 +33,13 @@ fn gen_attr_with_payload(
 fn generate_impl_from(
   generic: &str,
   target: &str,
-  block: cgen::Block,
+  mut block: cgen::Block,
+  wildcard: bool,
 ) -> cgen::Impl {
+  match wildcard {
+    true => block.line("_ => panic!(\"Invalid raw integer\"),"),
+    false => &mut block,
+  };
   let mut impl_from =
     cgen::Impl::new(typedef(format!("From<{}> for {}", generic, target)));
   let fn_from = cgen::Function::new("from")
@@ -51,6 +49,8 @@ fn generate_impl_from(
     .to_owned();
   return impl_from.push_fn(fn_from).to_owned();
 }
+
+fn generate_fnbody(target: HashMap<FuncName, FuncFields>) {}
 
 pub struct NidaqmxGen {
   scope: cgen::Scope,
@@ -64,9 +64,16 @@ impl NidaqmxGen {
       nidaqmx: NidaqmxMetadata::default(),
     }
     // .generate_funcs()
-    .generate_accrs()
+    .generate_etc()
     .generate_enums()
     .generate_attrs()
+    // .generate_accrs()
+  }
+
+  fn generate_etc(mut self) -> NidaqmxGen {
+    self.scope.import("std::any", "Any");
+    self.scope.import("openlate_sys::nidaqmx", "*");
+    self
   }
 
   fn generate_accrs(mut self) -> NidaqmxGen {
@@ -95,54 +102,54 @@ impl NidaqmxGen {
               ("out", None, None) => {
                 curr_accr.ret(typedef(par.r#type));
               }
-              ("in", Some(enm), Some(sz)) => {
-                curr_accr.ret(typedef(format!("Vec<{}>", enm.0)))
-                  .line(
-                  format!("let {} = unsafe {{ openlate_sys::{}(std::ptr::null_mut(), 0_u32) }};"
-                  ,sz.value, subm.0))
-                .line(format!("let mut buf = vec![0_u8; {} as usize]", sz.value))
-                  .line(
-                  format!("let errcode = unsafe {{ openlate_sys::{}(buf.as_mut_ptr(), {}) }};"
-                  ,subm.0,sz.value))
-                ;
-              }
-              ("in", None, Some(sz)) => {
-                curr_accr.ret(typedef(format!("Vec<{}>", par.r#type)))
-                  .line(
-                  format!("let {} = unsafe {{ openlate_sys::{}(std::ptr::null_mut(), 0_u32) }};"
-                  ,sz.value, subm.0))
-                .line(format!("let mut buf = vec![0_u8; {} as usize]", sz.value))
-                  .line(
-                  format!("let errcode = unsafe {{ openlate_sys::{}(buf.as_mut_ptr() as *mut i8, {} as u32) }};"
-                  ,subm.0,sz.value))
-                ;
-              }
+              // ("in", Some(enm), Some(sz)) => {
+              //   curr_accr.ret(typedef(format!("Vec<{}>", enm.0)))
+              //     .line(
+              //     format!("let {} = unsafe {{ {}(std::ptr::null_mut(), 0_u32) }};"
+              //     ,sz.value, subm.0))
+              //   .line(format!("let mut buf = vec![0_u8; {} as usize]", sz.value))
+              //     .line(
+              //     format!("let errcode = unsafe {{ {}(buf.as_mut_ptr(), {}) }};"
+              //     ,subm.0,sz.value))
+              //   ;
+              // }
+              // ("in", None, Some(sz)) => {
+              //   curr_accr.ret(typedef(format!("Vec<{}>", par.r#type)))
+              //     .line(
+              //     format!("let {} = unsafe {{ {}(std::ptr::null_mut(), 0_u32) }};"
+              //     ,sz.value, subm.0))
+              //   .line(format!("let mut buf = vec![0_u8; {} as usize]", sz.value))
+              //     .line(
+              //     format!("let errcode = unsafe {{ {}(buf.as_mut_ptr() as *mut i8, {} as u32) }};"
+              //     ,subm.0,sz.value))
+              //   ;
+              // }
               ("out", Some(enm), Some(sz)) => {
                 curr_accr.ret(typedef(format!("Vec<{}>", enm.0)))
-                  .line(
-                  format!("let {} = unsafe {{ openlate_sys::{}(std::ptr::null_mut(), 0_u32) }};"
-                  ,sz.value, subm.0))
-                .line(format!("let mut buf = vec![0_u8; {} as usize]", sz.value))
-                  .line(
-                  format!("let errcode = unsafe {{ openlate_sys::{}(buf.as_mut_ptr() as *mut i8, {} as u32) }};"
-                  ,subm.0,sz.value))
+                //   .line(
+                //   format!("let {} = unsafe {{ DAQmx{}(std::ptr::null_mut(), 0_u32) }};"
+                //   ,sz.value, subm.0))
+                // .line(format!("let mut buf = vec![0_u8; {} as usize];", sz.value))
+                //   .line(
+                //   format!("let errcode = unsafe {{ DAQmx{}(buf.as_mut_ptr() as *mut i8, {} as u32) }};"
+                //   ,subm.0,sz.value))
                 ;
               }
               ("out", None, Some(sz)) => {
                 curr_accr.ret(typedef(format!("Vec<{}>", par.r#type)))
-                  .line(
-                  format!("let {} = unsafe {{ openlate_sys::{}(std::ptr::null_mut(), 0_u32) }};"
-                  ,sz.value, subm.0))
-                .line(format!("let mut buf = vec![0_u8; {} as usize]", sz.value))
-                  .line(
-                  format!("let errcode = unsafe {{ openlate_sys::{}(buf.as_mut_ptr() as *mut i8, {} as u32) }};"
-                  ,subm.0,sz.value))
+                //   .line(
+                //   format!("let {} = unsafe {{ DAQmx{}(std::ptr::null_mut(), 0_u32) }};"
+                //   ,sz.value, subm.0))
+                // .line(format!("let mut buf = vec![0_u8; {} as usize];", sz.value))
+                //   .line(
+                //   format!("let errcode = unsafe {{DAQmx{}(buf.as_mut_ptr() as *mut i8, {} as u32) }};"
+                //   ,subm.0,sz.value))
                 ;
               }
               (&_, _, _) => panic!("Panicked!"),
             }
           }
-          self.scope.push_fn(curr_accr);
+          self.scope.push_fn(curr_accr.line("todo!();").to_owned());
         }
       }
     }
@@ -157,10 +164,10 @@ impl NidaqmxGen {
         attr.1.clone(),
       );
       let mut curr_enm = cgen::Enum::new(attr_name.to_owned());
-      let mut inner_block = cgen::Block::new("match self");
+      let mut inner_block = cgen::Block::new("match self").to_owned();
 
       for content in attr_values.0.iter() {
-        let (_, attr_property) = content;
+        let (attr_value, attr_property) = content;
         let attr_variant = attr_property
           .to_owned()
           .prefix_letter("d")
@@ -170,21 +177,16 @@ impl NidaqmxGen {
         let tn = <(&str, &str)>::from(attr_property.r#type.to_owned());
         curr_enm.push_variant(var);
         inner_block.line(format!(
-          "{} => AttrStruct {{ access: {}, resettable: {}, ty: [{};{}] }},",
+          "{} => DaqmxAttr {{ value: {}, access: {}, resettable: {}}},",
           attr_variant,
+          attr_value.0,
           String::from(AttrAccessEnum::from(attr_property.access.0.to_owned()))
             .to_owned(),
           attr_property.resettable.to_owned(),
-          tn.0,
-          tn.1
         ));
       }
-      let block_const_match = cgen::Block::new("")
-        .line(&format!("use {}::*;", attr_name).to_owned())
-        .push_block(inner_block)
-        .to_owned();
       let impl_const_ifmatch =
-        gen_attr_with_payload(&attr_name, "AttrStruct", block_const_match);
+        gen_attr_with_payload(&attr_name, "DaqmxAttr", inner_block);
       self
         .scope
         .push_enum(curr_enm.vis("pub").to_owned())
@@ -195,12 +197,10 @@ impl NidaqmxGen {
       .push_variant(cgen::Variant::new("Write"))
       .push_variant(cgen::Variant::new("ReadWrite"))
       .to_owned();
-    let attr_struct = cgen::Struct::new("AttrStruct")
-      .generic("T")
-      .generic("const N: usize")
+    let attr_struct = cgen::Struct::new("DaqmxAttr")
+      .push_field(cgen::Field::new("value", typedef("i32")))
       .push_field(cgen::Field::new("access", typedef("AttrAccess")))
       .push_field(cgen::Field::new("resettable", "bool"))
-      .push_field(cgen::Field::new("ty", "[T; N]"))
       .to_owned();
     self.scope.push_enum(access_enum);
     self.scope.push_struct(attr_struct);
@@ -235,8 +235,8 @@ impl NidaqmxGen {
           fixed_var.value
         ));
       }
-      let fr_raw = generate_impl_from("i32", &enum_name, block_raw);
-      let fr_enum = generate_impl_from(&enum_name, "i32", block_enum);
+      let fr_raw = generate_impl_from("i32", &enum_name, block_raw, true);
+      let fr_enum = generate_impl_from(&enum_name, "i32", block_enum, false);
       self
         .scope
         .push_enum(curr_enm.vis("pub").to_owned())
