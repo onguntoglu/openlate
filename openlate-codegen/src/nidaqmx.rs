@@ -6,8 +6,10 @@ use std::{
   collections::HashMap,
   fs::File,
   io::BufReader,
+  iter::Zip,
   ops::{Deref, DerefMut},
   path::PathBuf,
+  str::FromStr,
 };
 
 fn typedef(r#type: impl Into<String>) -> cgen::Type {
@@ -18,10 +20,10 @@ fn gen_attr_with_payload(
   attr: (AttrName, AttrContent),
 ) -> (cgen::Struct, cgen::Impl) {
   let (attr_name, attr_values) = (
-    attr.0.clone().to_string().to_pascal_case().to_owned(),
-    attr.1.clone(),
+    attr.0.to_pascal_case().to_owned() + "Attr",
+    attr.1.to_owned(),
   );
-  let mut curr_attr = cgen::Struct::new(&attr_name)
+  let curr_attr = cgen::Struct::new(&attr_name)
     .attr("non_exhaustive")
     .to_owned();
   let mut impl_attr = cgen::Impl::new(typedef(attr_name));
@@ -57,7 +59,7 @@ fn generate_impl_from(
     false => &mut block,
   };
   let mut impl_from =
-    cgen::Impl::new(typedef(format!("From<{}> for {}", generic, target)));
+    cgen::Impl::new(format!("From<{}> for {}", generic, target));
   let fn_from = cgen::Function::new("from")
     .arg("val", typedef(generic))
     .ret(typedef(target))
@@ -65,6 +67,17 @@ fn generate_impl_from(
     .to_owned();
   return impl_from.push_fn(fn_from).to_owned();
 }
+
+// fn unsafe_daqmx_call(name: String, pars: Vec<FuncParameter>) -> cgen::Block {
+//   let mut args = String::new();
+//   for par in pars.iter() {
+//     let (ty, nm) = (par.r#type.to_owned(), par.name.to_owned());
+//     args = args + &nm + ":" + c2rust(&ty);
+//   }
+//   cgen::Block::new("unsafe")
+//     .line(format!("{}({});", name, args))
+//     .to_owned()
+// }
 
 pub struct NidaqmxGen {
   scope: cgen::Scope,
@@ -77,10 +90,10 @@ impl NidaqmxGen {
       scope: cgen::Scope::new(),
       nidaqmx: NidaqmxMetadata::default(),
     }
-    // .generate_funcs()
     .generate_etc()
     .generate_enums()
     .generate_attrs()
+    .generate_funcs()
     // .generate_accrs()
   }
 
@@ -93,7 +106,14 @@ impl NidaqmxGen {
   fn generate_funcs(mut self) -> NidaqmxGen {
     let metadata = self.nidaqmx.func.0.drain();
     for (name, fields) in metadata {
-      let mut f = cgen::Function::new(name.0);
+      let mut f = name.get_prototype();
+      for par in fields.parameters {
+        match par.to_fn_arg() {
+          Some(p) => f.arg(&p.0, p.1),
+          None => &mut f,
+        };
+      }
+      self.scope.push_fn(f);
     }
     self
   }
@@ -190,8 +210,8 @@ impl NidaqmxGen {
       .push_variant(cgen::Variant::new("ReadWrite"))
       .to_owned();
     let attr_struct = cgen::Struct::new("DaqmxAttr")
-      .push_field(cgen::Field::new("value", typedef("i32")))
-      .push_field(cgen::Field::new("access", typedef("AttrAccess")))
+      .push_field(cgen::Field::new("value", "i32"))
+      .push_field(cgen::Field::new("access", "AttrAccess"))
       .push_field(cgen::Field::new("resettable", "bool"))
       .to_owned();
     self.scope.push_enum(access_enum);
@@ -290,12 +310,20 @@ pub struct AccrParameter {
 #[serde(rename_all = "PascalCase")]
 pub struct FuncMetadata(HashMap<FuncName, FuncFields>);
 
+impl FuncName {
+  fn get_prototype(self) -> cgen::Function {
+    cgen::Function::new(self.0)
+  }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FuncFields {
   cname: Option<String>,
   parameters: Vec<FuncParameter>,
   returns: FuncReturn,
 }
+
+impl FuncFields {}
 
 #[derive(Debug, Serialize, Eq, PartialEq, Hash, Deserialize)]
 pub struct FuncName(String);
@@ -307,9 +335,140 @@ pub struct FuncReturn(String);
 pub struct FuncParameter {
   direction: String,
   name: String,
+  grpc_type: Option<String>,
+  repeating_argument: Option<bool>,
   r#type: Option<String>,
   size: Option<ParameterSize>,
   r#enum: Option<EnumName>,
+  include_in_proto: Option<bool>,
+  pointer: Option<bool>,
+  hardcoded_value: Option<String>,
+  repeated_var_args: Option<bool>,
+}
+
+impl FuncParameter {
+  fn c2rust(&self) -> String {
+    println!("{:#?}", self.r#type);
+    if self.has_type() {
+      match self.r#type.clone().unwrap().as_str() {
+        "int8" => "i8",
+        "uInt8" => "u8",
+        "int16" => "i16",
+        "uInt16" => "u16",
+        "int32" => "i32",
+        "uInt32" => "u32",
+        "float32" => "f32",
+        "float64" => "f64",
+        "int64" => "i64",
+        "uInt64" => "u64",
+        "bool32" => "bool",
+        "TaskHandle" => "TaskHandle",
+        "CVIAbsoluteTime" => "CVIAbsoluteTime",
+        "const int8[]" => "Vec<i8>",
+        "const uInt8[]" => "Vec<u8>",
+        "const int16[]" => "Vec<i16>",
+        "const uInt16[]" => "Vec<u16>",
+        "const int32[]" => "Vec<i32>",
+        "const uInt32[]" => "Vec<u32>",
+        "const float32[]" => "Vec<f32>",
+        "const float64[]" => "Vec<f64>",
+        "const int64[]" => "Vec<i64>",
+        "const uInt64[]" => "Vec<u64>",
+        "int8[]" => "Vec<i8>",
+        "uInt8[]" => "Vec<u8>",
+        "int16[]" => "Vec<i16>",
+        "uInt16[]" => "Vec<u16>",
+        "int32[]" => "Vec<i32>",
+        "uInt32[]" => "Vec<u32>",
+        "float32[]" => "Vec<f32>",
+        "float64[]" => "Vec<f64>",
+        "int64[]" => "Vec<i64>",
+        "uInt64[]" => "Vec<u64>",
+        "char[]" => "*mut i8",
+        "const char[]" => "*const i8",
+        "void" => "std::ffi::c_void",
+        "DAQmxEveryNSamplesEventCallbackPtr" => {
+          "DAQmxEveryNSamplesEventCallbackPtr"
+        }
+        "DAQmxDoneEventCallbackPtr" => "DAQmxDoneEventCallbackPtr",
+        "DAQmxSignalEventCallbackPtr" => "DAQmxSignalEventCallbackPtr",
+
+        _ => todo!(),
+      }
+      .to_string()
+    } else {
+      "foo".to_string()
+    }
+  }
+
+  fn to_fn_arg(&self) -> Option<(String, String)> {
+    let nm = match self.name.clone().as_str() {
+      "type" => "r#type",
+      _ => &self.name,
+    };
+
+    if self.has_enum() {
+      Some((
+        nm.to_string(),
+        String::from(self.r#enum.clone().unwrap().0.clone()),
+      ))
+    } else if self.has_type() {
+      Some((nm.to_string(), self.c2rust()))
+    } else {
+      None
+    }
+  }
+
+  fn is_repeating_argument(&self) -> bool {
+    match self.repeating_argument {
+      Some(_) => true,
+      None => false,
+    }
+  }
+  fn has_grpc_type(&self) -> bool {
+    match self.grpc_type {
+      Some(_) => true,
+      None => false,
+    }
+  }
+  fn is_repeated_var_args(&self) -> bool {
+    match self.repeated_var_args {
+      Some(_) => true,
+      None => false,
+    }
+  }
+
+  fn has_size(&self) -> bool {
+    match self.size {
+      Some(_) => true,
+      None => false,
+    }
+  }
+  fn has_type(&self) -> bool {
+    match self.r#type {
+      Some(_) => true,
+      None => false,
+    }
+  }
+
+  fn has_enum(&self) -> bool {
+    match self.r#enum {
+      Some(_) => true,
+      None => false,
+    }
+  }
+}
+
+enum DaqmxMechanism {
+  Simple,
+  Fixed,
+  Len,
+  IviDance,
+  IviDanceWithATwist,
+  PassedIn,
+  PassedInByPtr,
+  TwoDimension,
+  CustomCode,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq, Deserialize, Hash)]
@@ -318,7 +477,25 @@ pub struct ParameterSize {
   value: String,
 }
 
-#[derive(Hash, Default, Eq, PartialEq, Debug, Serialize, Deserialize)]
+impl ParameterSize {
+  fn get_mechanism(&self) -> DaqmxMechanism {
+    match self.mechanism.as_str() {
+      "fixed" => DaqmxMechanism::Fixed,
+      "len" => DaqmxMechanism::Len,
+      "ivi-dance" => DaqmxMechanism::IviDance,
+      "ivi-dance-with-a-twist" => DaqmxMechanism::IviDanceWithATwist,
+      "passed-in" => DaqmxMechanism::PassedIn,
+      "passed-in-by-ptr" => DaqmxMechanism::PassedInByPtr,
+      "two-dimension" => DaqmxMechanism::TwoDimension,
+      "custom-code" => DaqmxMechanism::CustomCode,
+      _ => panic!("Unexpected raw DaqmxMechanism!"),
+    }
+  }
+}
+
+#[derive(
+  Hash, Clone, Default, Eq, PartialEq, Debug, Serialize, Deserialize,
+)]
 pub struct EnumName(String);
 #[derive(Hash, Default, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct AttrName(String);
@@ -478,36 +655,6 @@ enum AttrAccessEnum {
   Read,
   Write,
   ReadWrite,
-}
-impl From<AttrType> for (&str, &str) {
-  fn from(val: AttrType) -> Self {
-    match val.0.as_str() {
-      "int8" => ("i8", "0"),
-      "uInt8" => ("u8", "0"),
-      "int16" => ("i16", "0"),
-      "uInt16" => ("u16", "0"),
-      "int32" => ("i32", "0"),
-      "uInt32" => ("u32", "0"),
-      "float32" => ("f32", "0"),
-      "float64" => ("f64", "0"),
-      "int64" => ("i64", "0"),
-      "uInt64" => ("u64", "0"),
-      "bool32" => ("bool", "0"),
-      "CVIAbsoluteTime" => ("CVIAbsoluteTime", "0"),
-      "int8[]" => ("i8", "N"),
-      "uInt8[]" => ("u8", "N"),
-      "int16[]" => ("i16", "N"),
-      "uInt16[]" => ("u16", "N"),
-      "int32[]" => ("i32", "N"),
-      "uInt32[]" => ("u32", "N"),
-      "float32[]" => ("f32", "N"),
-      "float64[]" => ("f64", "N"),
-      "int64[]" => ("i64", "N"),
-      "uInt64[]" => ("u64", "N"),
-      "char[]" => ("i8", "N"),
-      _ => panic!("Missing match arm detected!"),
-    }
-  }
 }
 
 impl From<String> for AttrAccessEnum {
